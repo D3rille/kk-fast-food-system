@@ -57,23 +57,23 @@ function CartScreen() {
       <main className="flex-1 overflow-y-auto px-6">
         {items.map((item) => (
           <CartItem
-            key={item.product.id}
+            key={item.id}
             item={item}
             onIncrement={() =>
               dispatch({
                 type: "UPDATE_QUANTITY",
-                productId: item.product.id,
+                itemId: item.id,
                 quantity: item.quantity + 1,
               })
             }
             onDecrement={() =>
               dispatch({
                 type: "UPDATE_QUANTITY",
-                productId: item.product.id,
+                itemId: item.id,
                 quantity: item.quantity - 1,
               })
             }
-            onRemove={() => dispatch({ type: "REMOVE_ITEM", productId: item.product.id })}
+            onRemove={() => dispatch({ type: "REMOVE_ITEM", itemId: item.id })}
           />
         ))}
       </main>

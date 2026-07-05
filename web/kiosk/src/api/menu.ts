@@ -1,4 +1,4 @@
-import type { Category, Product } from "@/types/api"
+import type { Category, ModifierGroup, Product } from "@/types/api"
 import { apiFetch } from "./client"
 
 const storeId = import.meta.env.VITE_STORE_ID ?? "00000000-0000-0000-0000-000000000000"
@@ -9,4 +9,8 @@ export function getCategories(): Promise<Category[]> {
 
 export function getProducts(categoryId?: string): Promise<Product[]> {
   return apiFetch<Product[]>("/api/v1/menu/items", undefined, { category_id: categoryId })
+}
+
+export function getProductModifiers(productId: string): Promise<ModifierGroup[]> {
+  return apiFetch<ModifierGroup[]>(`/api/v1/menu/items/${productId}/modifiers`)
 }

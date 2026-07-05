@@ -5,6 +5,7 @@ export interface OrderItemPayload {
   product_id: string
   quantity: number
   unit_price: number
+  modifier_option_ids: string[]
 }
 
 export function createOrder(

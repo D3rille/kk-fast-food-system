@@ -1,20 +1,27 @@
 import { useEffect, useState } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { IconShoppingCart } from "@tabler/icons-react"
-import { getCategories, getProducts } from "@/api/menu"
+import { getCategories, getProductModifiers, getProducts } from "@/api/menu"
 import { CategoryTabs } from "@/components/menu/CategoryTabs"
 import { ProductCard } from "@/components/menu/ProductCard"
+import { ProductCustomizeModal } from "@/components/menu/ProductCustomizeModal"
 import { useCart } from "@/contexts/cart"
 import { Button } from "@/components/ui/button"
-import type { Product } from "@/types/api"
+import type { ModifierGroup, Product, SelectedModifier } from "@/types/api"
 
 export const Route = createFileRoute("/menu/")({ component: MenuScreen })
 
 function MenuScreen() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { dispatch, itemCount, total } = useCart()
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined)
+  const [loadingProductId, setLoadingProductId] = useState<string | null>(null)
+  const [customizeProduct, setCustomizeProduct] = useState<Product | null>(null)
+  const [customizeGroups, setCustomizeGroups] = useState<ModifierGroup[]>([])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [customizeKey, setCustomizeKey] = useState(0)
 
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
     queryKey: ["categories"],
@@ -40,8 +47,45 @@ function MenuScreen() {
     ? products.filter((p) => p.category_id === activeCategoryId)
     : products
 
-  function handleAdd(product: Product) {
-    dispatch({ type: "ADD_ITEM", product })
+  async function handleAdd(product: Product) {
+    setLoadingProductId(product.id)
+    try {
+      const groups = await queryClient.fetchQuery({
+        queryKey: ["modifiers", product.id],
+        queryFn: () => getProductModifiers(product.id),
+        staleTime: 5 * 60 * 1000,
+      })
+      if (groups.length === 0) {
+        dispatch({
+          type: "ADD_ITEM",
+          product,
+          selectedModifiers: [],
+          unitPrice: product.base_price,
+        })
+      } else {
+        setCustomizeProduct(product)
+        setCustomizeGroups(groups)
+        setCustomizeKey((k) => k + 1)
+        setModalOpen(true)
+      }
+    } finally {
+      setLoadingProductId(null)
+    }
+  }
+
+  function handleConfirmCustomize(
+    selectedModifiers: SelectedModifier[],
+    unitPrice: number,
+    quantity: number,
+  ) {
+    if (!customizeProduct) return
+    dispatch({
+      type: "ADD_ITEM",
+      product: customizeProduct,
+      selectedModifiers,
+      unitPrice,
+      quantity,
+    })
   }
 
   const isLoading = loadingCategories || loadingProducts
@@ -125,11 +169,27 @@ function MenuScreen() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visibleProducts.map((product) => (
-              <ProductCard key={product.id} product={product} onAdd={handleAdd} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAdd={handleAdd}
+                isLoading={loadingProductId === product.id}
+              />
             ))}
           </div>
         )}
       </main>
+
+      {customizeProduct && (
+        <ProductCustomizeModal
+          key={customizeKey}
+          product={customizeProduct}
+          groups={customizeGroups}
+          open={modalOpen}
+          onOpenChange={setModalOpen}
+          onConfirm={handleConfirmCustomize}
+        />
+      )}
 
       {itemCount > 0 && (
         <div className="shrink-0 border-t border-border bg-card px-4 py-3">

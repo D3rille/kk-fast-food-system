@@ -23,6 +23,13 @@ export interface Order {
   updated_at: string
 }
 
+export interface OrderItemModifier {
+  modifier_option_id: string
+  group_name: string
+  name: string
+  extra_price: number // centavos
+}
+
 export interface OrderItem {
   id: string
   product_id: string
@@ -31,6 +38,7 @@ export interface OrderItem {
   unit_price: number // centavos
   subtotal: number // centavos
   created_at: string
+  modifiers: OrderItemModifier[]
 }
 
 export interface OrderDetail extends Order {

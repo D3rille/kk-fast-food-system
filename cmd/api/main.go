@@ -67,6 +67,7 @@ func main() {
 	paymentRepo := repository.NewPaymentRepository(db)
 	categoryRepo := repository.NewCategoryRepository(db)
 	productRepo := repository.NewProductRepository(db)
+	modifierRepo := repository.NewModifierRepository(db)
 
 	// 6. Initialize WebSocket hub and start event fan-out goroutine
 	wsHub := ws.NewHub(log)
@@ -81,10 +82,11 @@ func main() {
 
 	// 7. Initialize Services
 	authService := service.NewAuthService(userRepo, storeRepo, cfg.JWT.Secret, cfg.JWT.Expiration, cfg.JWT.RefreshExpiration)
-	orderService := service.NewOrderServiceWithItems(orderRepo, orderItemRepo, paymentRepo, wsHub)
+	orderService := service.NewOrderServiceWithItems(orderRepo, orderItemRepo, paymentRepo, productRepo, modifierRepo, wsHub)
 	categoryService := service.NewCategoryService(categoryRepo)
 	imageService := service.NewImageService(imageStorage, cfg.Storage.MaxUploadSizeMB*1024*1024)
 	productService := service.NewProductService(productRepo, imageService, log)
+	modifierService := service.NewModifierService(modifierRepo)
 
 	// Payment providers registry
 	paymentProviders := map[string]service.PaymentProvider{
@@ -97,6 +99,7 @@ func main() {
 	orderHandler := handlers.NewOrderHandler(orderService, paymentProviders)
 	categoryHandler := handlers.NewCategoryHandler(categoryService)
 	productHandler := handlers.NewProductHandler(productService, cfg.Storage.MaxUploadSizeMB*1024*1024)
+	modifierHandler := handlers.NewModifierHandler(modifierService)
 
 	// 9. Mount health handlers
 	r.Get("/healthz", healthHandler.Healthz)
@@ -123,6 +126,7 @@ func main() {
 		r.Route("/menu", func(r chi.Router) {
 			r.Get("/categories", categoryHandler.ListActive)
 			r.Get("/items", productHandler.ListAvailable)
+			r.Get("/items/{id}/modifiers", modifierHandler.GetForProduct)
 		})
 
 		// Protected Admin Routes
@@ -147,6 +151,24 @@ func main() {
 					r.Put("/{id}", productHandler.Update)
 					r.Delete("/{id}", productHandler.Delete)
 					r.Patch("/{id}/availability", productHandler.ToggleAvailability)
+					r.Post("/{id}/modifier-groups", modifierHandler.AttachToProduct)
+					r.Delete("/{id}/modifier-groups/{groupId}", modifierHandler.DetachFromProduct)
+				})
+			})
+
+			r.Route("/admin/modifiers", func(r chi.Router) {
+				r.Route("/groups", func(r chi.Router) {
+					r.Post("/", modifierHandler.CreateGroup)
+					r.Get("/", modifierHandler.ListGroups)
+					r.Get("/{id}", modifierHandler.GetGroup)
+					r.Put("/{id}", modifierHandler.UpdateGroup)
+					r.Delete("/{id}", modifierHandler.DeleteGroup)
+					r.Post("/{id}/options", modifierHandler.CreateOption)
+					r.Get("/{id}/options", modifierHandler.ListOptions)
+				})
+				r.Route("/options", func(r chi.Router) {
+					r.Put("/{optionId}", modifierHandler.UpdateOption)
+					r.Delete("/{optionId}", modifierHandler.DeleteOption)
 				})
 			})
 		})

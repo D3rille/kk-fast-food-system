@@ -35,7 +35,8 @@ function PaymentScreen() {
       const orderItems = items.map((item) => ({
         product_id: item.product.id,
         quantity: item.quantity,
-        unit_price: item.product.base_price,
+        unit_price: item.unitPrice,
+        modifier_option_ids: item.selectedModifiers.map((m) => m.optionId),
       }))
       const order = await createOrder(storeId ?? "", total, orderItems)
       await checkoutOrder(order.id)
@@ -83,14 +84,19 @@ function PaymentScreen() {
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
             Order Summary
           </h2>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {items.map((item) => (
-              <div key={item.product.id} className="flex justify-between text-sm">
+              <div key={item.id} className="flex justify-between text-sm">
                 <span className="truncate text-foreground/75">
                   {item.quantity}× {item.product.name}
+                  {item.selectedModifiers.length > 0 && (
+                    <span className="block text-xs text-muted-foreground/80 mt-0.5">
+                      {item.selectedModifiers.map((m) => m.name).join(", ")}
+                    </span>
+                  )}
                 </span>
                 <span className="font-mono font-medium shrink-0 ml-4 tabular-nums">
-                  {formatPrice(item.product.base_price * item.quantity)}
+                  {formatPrice(item.unitPrice * item.quantity)}
                 </span>
               </div>
             ))}

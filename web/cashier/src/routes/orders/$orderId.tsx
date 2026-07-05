@@ -135,7 +135,14 @@ function OrderDetailPage() {
                 <tbody>
                   {order.items.map((item) => (
                     <tr key={item.id} className="border-b border-border last:border-0">
-                      <td className="px-4 py-3 font-medium">{item.product_name}</td>
+                      <td className="px-4 py-3 font-medium">
+                        {item.product_name}
+                        {item.modifiers.length > 0 && (
+                          <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                            {item.modifiers.map((m) => m.name).join(", ")}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-center text-muted-foreground">{item.quantity}</td>
                       <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
                         {formatPrice(item.unit_price)}

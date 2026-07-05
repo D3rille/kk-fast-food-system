@@ -21,6 +21,28 @@ export interface Order {
   updated_at: string
 }
 
+export interface OrderItemModifier {
+  modifier_option_id: string
+  group_name: string
+  name: string
+  extra_price: number
+}
+
+export interface OrderItem {
+  id: string
+  product_id: string
+  product_name: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+  created_at: string
+  modifiers: OrderItemModifier[]
+}
+
+export interface OrderDetail extends Order {
+  items: OrderItem[]
+}
+
 export interface OrderEvent {
   type: "order.created" | "order.paid" | "order.status_changed"
   order_id: string

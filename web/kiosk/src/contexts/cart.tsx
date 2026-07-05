@@ -1,39 +1,66 @@
 import { createContext, useContext, useReducer } from "react"
 import type { ReactNode } from "react"
-import type { CartItem, Product } from "@/types/api"
+import type { CartItem, Product, SelectedModifier } from "@/types/api"
 
 type CartAction =
-  | { type: "ADD_ITEM"; product: Product }
-  | { type: "REMOVE_ITEM"; productId: string }
-  | { type: "UPDATE_QUANTITY"; productId: string; quantity: number }
+  | {
+      type: "ADD_ITEM"
+      product: Product
+      selectedModifiers: SelectedModifier[]
+      unitPrice: number
+      quantity?: number
+    }
+  | { type: "REMOVE_ITEM"; itemId: string }
+  | { type: "UPDATE_QUANTITY"; itemId: string; quantity: number }
   | { type: "CLEAR_CART" }
 
 interface CartState {
   items: CartItem[]
 }
 
+// Two lines are the "same" cart entry only if they're the same product AND the same set of
+// selected modifier options — a Regular fries and a Large fries must stay on separate lines.
+function lineKey(productId: string, selectedModifiers: SelectedModifier[]): string {
+  const optionIds = selectedModifiers
+    .map((m) => m.optionId)
+    .sort()
+    .join(",")
+  return `${productId}::${optionIds}`
+}
+
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case "ADD_ITEM": {
-      const existing = state.items.find((i) => i.product.id === action.product.id)
+      const addQuantity = action.quantity ?? 1
+      const key = lineKey(action.product.id, action.selectedModifiers)
+      const existing = state.items.find(
+        (i) => lineKey(i.product.id, i.selectedModifiers) === key,
+      )
       if (existing) {
         return {
           items: state.items.map((i) =>
-            i.product.id === action.product.id ? { ...i, quantity: i.quantity + 1 } : i,
+            i.id === existing.id ? { ...i, quantity: i.quantity + addQuantity } : i,
           ),
         }
       }
-      return { items: [...state.items, { product: action.product, quantity: 1 }] }
+      const newItem: CartItem = {
+        id: `${key}::${crypto.randomUUID()}`,
+        product: action.product,
+        quantity: addQuantity,
+        selectedModifiers: action.selectedModifiers,
+        unitPrice: action.unitPrice,
+      }
+      return { items: [...state.items, newItem] }
     }
     case "REMOVE_ITEM":
-      return { items: state.items.filter((i) => i.product.id !== action.productId) }
+      return { items: state.items.filter((i) => i.id !== action.itemId) }
     case "UPDATE_QUANTITY": {
       if (action.quantity <= 0) {
-        return { items: state.items.filter((i) => i.product.id !== action.productId) }
+        return { items: state.items.filter((i) => i.id !== action.itemId) }
       }
       return {
         items: state.items.map((i) =>
-          i.product.id === action.productId ? { ...i, quantity: action.quantity } : i,
+          i.id === action.itemId ? { ...i, quantity: action.quantity } : i,
         ),
       }
     }
@@ -56,10 +83,7 @@ const CartContext = createContext<CartContextValue | null>(null)
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, { items: [] })
 
-  const total = state.items.reduce(
-    (sum, item) => sum + item.product.base_price * item.quantity,
-    0,
-  )
+  const total = state.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
   const itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0)
 
   return (

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/D3rille/kk-fast-food-system/internal/models"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -31,6 +32,10 @@ func (r *postgresOrderItemRepository) CreateBatch(ctx context.Context, items []*
 		INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, calculated_subtotal, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
+	modifierQuery := `
+		INSERT INTO order_item_modifiers (id, order_item_id, modifier_option_id, created_at)
+		VALUES ($1, $2, $3, $4)
+	`
 	for _, item := range items {
 		if _, err := r.db.Exec(ctx, query,
 			item.ID,
@@ -42,6 +47,16 @@ func (r *postgresOrderItemRepository) CreateBatch(ctx context.Context, items []*
 			item.CreatedAt,
 		); err != nil {
 			return fmt.Errorf("failed to insert order item: %w", err)
+		}
+
+		for _, optionID := range item.ModifierOptionIDs {
+			modID, err := uuid.NewV7()
+			if err != nil {
+				return fmt.Errorf("failed to generate order item modifier ID: %w", err)
+			}
+			if _, err := r.db.Exec(ctx, modifierQuery, modID.String(), item.ID, optionID, item.CreatedAt); err != nil {
+				return fmt.Errorf("failed to insert order item modifier: %w", err)
+			}
 		}
 	}
 	return nil
@@ -75,10 +90,43 @@ func (r *postgresOrderItemRepository) GetByOrderIDWithProducts(ctx context.Conte
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan order item row: %w", err)
 		}
+		item.Modifiers = []models.OrderItemModifierResponse{}
 		items = append(items, item)
 	}
 	if items == nil {
 		items = []models.OrderItemResponse{}
+		return items, nil
 	}
+
+	itemIDs := make([]string, len(items))
+	indexByItemID := make(map[string]int, len(items))
+	for i, item := range items {
+		itemIDs[i] = item.ID
+		indexByItemID[item.ID] = i
+	}
+
+	modifierQuery := `
+		SELECT oim.order_item_id, oim.modifier_option_id, mo.name, mo.extra_price, mg.name
+		FROM order_item_modifiers oim
+		JOIN modifier_options mo ON mo.id = oim.modifier_option_id
+		JOIN modifier_groups mg ON mg.id = mo.modifier_group_id
+		WHERE oim.order_item_id = ANY($1)
+	`
+	modRows, err := r.db.Query(ctx, modifierQuery, itemIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query order item modifiers: %w", err)
+	}
+	defer modRows.Close()
+
+	for modRows.Next() {
+		var orderItemID string
+		var m models.OrderItemModifierResponse
+		if err := modRows.Scan(&orderItemID, &m.ModifierOptionID, &m.Name, &m.ExtraPrice, &m.GroupName); err != nil {
+			return nil, fmt.Errorf("failed to scan order item modifier row: %w", err)
+		}
+		idx := indexByItemID[orderItemID]
+		items[idx].Modifiers = append(items[idx].Modifiers, m)
+	}
+
 	return items, nil
 }

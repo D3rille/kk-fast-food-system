@@ -5,7 +5,7 @@ import { fetchKitchenOrders, fetchOrder, advanceOrder } from "@/api/orders"
 import { useKitchenWs } from "@/hooks/useKitchenWs"
 import { Header } from "@/components/Header"
 import { OrderTicket } from "@/components/OrderTicket"
-import type { Order, OrderEvent, OrderStatus } from "@/types/api"
+import type { OrderDetail, OrderEvent, OrderStatus } from "@/types/api"
 import { REMOVE_FROM_KITCHEN } from "@/types/api"
 
 export default function App() {
@@ -43,7 +43,7 @@ export default function App() {
       if (event.type === "order.paid") {
         try {
           const order = await fetchOrder(event.order_id)
-          queryClient.setQueryData<Order[]>(["kitchen-orders"], (old = []) => {
+          queryClient.setQueryData<OrderDetail[]>(["kitchen-orders"], (old = []) => {
             if (old.find((o) => o.id === order.id)) return old
             return [...old, order]
           })
@@ -51,7 +51,7 @@ export default function App() {
           // If fetch fails, the 30s poll will catch it
         }
       } else if (event.type === "order.status_changed") {
-        queryClient.setQueryData<Order[]>(["kitchen-orders"], (old = []) => {
+        queryClient.setQueryData<OrderDetail[]>(["kitchen-orders"], (old = []) => {
           if (REMOVE_FROM_KITCHEN.includes(event.status)) {
             return old.filter((o) => o.id !== event.order_id)
           }
@@ -73,11 +73,13 @@ export default function App() {
     onMutate: ({ id }) => setAdvancingId(id),
     onSettled: () => setAdvancingId(null),
     onSuccess: (updated) => {
-      queryClient.setQueryData<Order[]>(["kitchen-orders"], (old = []) => {
+      // advanceOrder only returns the order summary (no items) — merge in just the status
+      // so the ticket doesn't lose its items/modifiers on the next render.
+      queryClient.setQueryData<OrderDetail[]>(["kitchen-orders"], (old = []) => {
         if (REMOVE_FROM_KITCHEN.includes(updated.status)) {
           return old.filter((o) => o.id !== updated.id)
         }
-        return old.map((o) => (o.id === updated.id ? updated : o))
+        return old.map((o) => (o.id === updated.id ? { ...o, status: updated.status } : o))
       })
     },
   })
