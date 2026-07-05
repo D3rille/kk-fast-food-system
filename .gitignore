@@ -1,0 +1,38 @@
+# Binaries
+bin/
+server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*~
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Environments & Secret configs (Never commit secrets!)
+configs/.env
+.env
+.env.local
+.env.*.local
+
+# Docker & local database data
+pgdata/
+
+# Uploaded menu item images (keep the directory, ignore its contents)
+files/images/*
+!files/images/.gitkeep

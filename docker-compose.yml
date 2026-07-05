@@ -1,0 +1,154 @@
+services:
+  postgres:
+    image: postgres:18.4-alpine
+    environment:
+      POSTGRES_DB: fastfood
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-devpassword123}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d fastfood"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
+      DATABASE_URL: postgres://app:${DB_PASSWORD:-devpassword123}@postgres:5432/fastfood?sslmode=disable
+      APP_ENV: production
+      APP_LOG_LEVEL: info
+    volumes:
+      - ./files/images:/files/images
+    ports:
+      - "8080:8080"
+
+  # kiosk:
+  #   build:
+  #     context: ./web/kiosk
+  #     args:
+  #       VITE_API_BASE_URL: http://localhost:8080
+  #       VITE_STORE_ID: ${VITE_STORE_ID:-aaaaaaaa-0000-0000-0000-000000000001}
+  #       VITE_KIOSK_USERNAME: ${KIOSK_USERNAME:-kiosk}
+  #       VITE_KIOSK_PASSWORD: ${KIOSK_PASSWORD:-kiosk123}
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3000:3000"
+
+  kiosk-dev:
+    build:
+      context: ./web/kiosk
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./web/kiosk:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+      VITE_STORE_ID: ${VITE_STORE_ID:-aaaaaaaa-0000-0000-0000-000000000001}
+      VITE_KIOSK_USERNAME: ${KIOSK_USERNAME:-kiosk}
+      VITE_KIOSK_PASSWORD: ${KIOSK_PASSWORD:-kiosk123}
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+  #   profiles:
+  #     - dev
+
+  # kds:
+  #   build:
+  #     context: ./web/kds
+  #     args:
+  #       VITE_API_BASE_URL: http://localhost:8080
+  #       VITE_WS_BASE_URL: ws://localhost:8080
+  #       VITE_KDS_USERNAME: ${KDS_USERNAME:-kitchen}
+  #       VITE_KDS_PASSWORD: ${KDS_PASSWORD:-kitchen123}
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3001:3001"
+
+  kds-dev:
+    build:
+      context: ./web/kds
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./web/kds:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+      VITE_WS_BASE_URL: ws://localhost:8080
+      VITE_KDS_USERNAME: ${KDS_USERNAME:-kitchen}
+      VITE_KDS_PASSWORD: ${KDS_PASSWORD:-kitchen123}
+    depends_on:
+      - backend
+    ports:
+      - "3001:3001"
+      # - "5173:5173"
+  #   profiles:
+  #     - dev
+
+  # cashier:
+  #   build:
+  #     context: ./web/cashier
+  #     args:
+  #       VITE_API_BASE_URL: http://localhost:8080
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3003:3003"
+
+  cashier-dev:
+    build:
+      context: ./web/cashier
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./web/cashier:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    depends_on:
+      - backend
+    ports:
+      - "3003:3003"
+  #   profiles:
+  #     - dev
+
+  # admin:
+  #   build:
+  #     context: ./web/admin
+  #     args:
+  #       VITE_API_BASE_URL: http://localhost:8080
+  #       VITE_STORE_ID: ${VITE_STORE_ID:-aaaaaaaa-0000-0000-0000-000000000001}
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3002:3002"
+
+  admin-dev:
+    build:
+      context: ./web/admin
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./web/admin:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    depends_on:
+      - backend
+    ports:
+      - "3002:3002"
+      # - "5174:5174"
+  #   profiles:
+  #     - dev
+
+volumes:
+  pgdata:

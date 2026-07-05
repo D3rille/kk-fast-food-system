@@ -1,0 +1,29 @@
+# Ignore git versioning files
+.git
+.github
+
+# Ignore documentation (not needed to build or run the Go server)
+documentation/
+README.md
+
+# Ignore IDE settings
+.idea/
+.vscode/
+*.swp
+*~
+
+# Ignore local binaries and build outputs
+bin/
+server
+*.exe
+*.test
+*.prof
+
+# Ignore local secret configurations
+configs/.env
+.env
+.env.local
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
