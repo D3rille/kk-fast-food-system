@@ -1,14 +1,23 @@
 import { useState, useEffect, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { createFileRoute } from "@tanstack/react-router"
 import { kitchenLogin } from "@/api/auth"
-import { fetchKitchenOrders, fetchOrder, advanceOrder } from "@/api/orders"
+import {
+  fetchKitchenOrders,
+  fetchOrder,
+  startPreparation,
+  markReady,
+  completeOrder,
+} from "@/api/orders"
 import { useKitchenWs } from "@/hooks/useKitchenWs"
 import { Header } from "@/components/Header"
 import { OrderTicket } from "@/components/OrderTicket"
-import type { OrderDetail, OrderEvent, OrderStatus } from "@/types/api"
+import type { Order, OrderDetail, OrderEvent } from "@/types/api"
 import { REMOVE_FROM_KITCHEN } from "@/types/api"
 
-export default function App() {
+export const Route = createFileRoute("/")({ component: StaffBoard })
+
+function StaffBoard() {
   const queryClient = useQueryClient()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loginError, setLoginError] = useState<string | null>(null)
@@ -29,7 +38,7 @@ export default function App() {
       .catch((e: Error) => setLoginError(e.message))
   }, [])
 
-  // Initial load: all active kitchen orders (paid or in_preparation)
+  // Initial load: all active kitchen orders (paid, in_preparation, or ready_for_pickup)
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["kitchen-orders"],
     queryFn: fetchKitchenOrders,
@@ -66,39 +75,61 @@ export default function App() {
 
   useKitchenWs({ onEvent: handleEvent, onConnectionChange: setWsConnected })
 
-  // Advance an order's status and update the local cache immediately
-  const advanceMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
-      advanceOrder(id, status),
-    onMutate: ({ id }) => setAdvancingId(id),
+  // advanceOrder only returns the order summary (no items) — merge in just the status
+  // so the ticket doesn't lose its items/modifiers on the next render.
+  function mergeStatus(updated: Order) {
+    queryClient.setQueryData<OrderDetail[]>(["kitchen-orders"], (old = []) => {
+      if (REMOVE_FROM_KITCHEN.includes(updated.status)) {
+        return old.filter((o) => o.id !== updated.id)
+      }
+      return old.map((o) => (o.id === updated.id ? { ...o, status: updated.status } : o))
+    })
+  }
+
+  const startPrepMutation = useMutation({
+    mutationFn: startPreparation,
+    onMutate: (id) => setAdvancingId(id),
     onSettled: () => setAdvancingId(null),
-    onSuccess: (updated) => {
-      // advanceOrder only returns the order summary (no items) — merge in just the status
-      // so the ticket doesn't lose its items/modifiers on the next render.
-      queryClient.setQueryData<OrderDetail[]>(["kitchen-orders"], (old = []) => {
-        if (REMOVE_FROM_KITCHEN.includes(updated.status)) {
-          return old.filter((o) => o.id !== updated.id)
-        }
-        return old.map((o) => (o.id === updated.id ? { ...o, status: updated.status } : o))
-      })
-    },
+    onSuccess: mergeStatus,
   })
 
-  function handleAdvance(id: string, status: OrderStatus) {
-    advanceMutation.mutate({ id, status })
-  }
+  const markReadyMutation = useMutation({
+    mutationFn: markReady,
+    onMutate: (id) => setAdvancingId(id),
+    onSettled: () => setAdvancingId(null),
+    onSuccess: mergeStatus,
+  })
+
+  const completeMutation = useMutation({
+    mutationFn: completeOrder,
+    onMutate: (id) => setAdvancingId(id),
+    onSettled: () => setAdvancingId(null),
+    onSuccess: mergeStatus,
+  })
 
   // Sort FIFO — oldest first
   const sorted = [...orders].sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   )
 
-  const pending = sorted.filter((o) => o.status === "paid").length
-  const inPrep = sorted.filter((o) => o.status === "in_preparation").length
+  const queued = sorted.filter((o) => o.status === "paid")
+  const inPrep = sorted.filter((o) => o.status === "in_preparation")
+  const ready = sorted.filter((o) => o.status === "ready_for_pickup")
+
+  const columns = [
+    { title: "Queued", orders: queued },
+    { title: "In Prep", orders: inPrep },
+    { title: "Ready for Pickup", orders: ready },
+  ]
 
   return (
     <div className="flex flex-col min-h-svh bg-background">
-      <Header connected={wsConnected} pending={pending} inPrep={inPrep} />
+      <Header
+        connected={wsConnected}
+        pending={queued.length}
+        inPrep={inPrep.length}
+        ready={ready.length}
+      />
 
       <main className="flex-1 p-4 overflow-auto">
         {loginError && (
@@ -130,18 +161,26 @@ export default function App() {
         )}
 
         {sorted.length > 0 && (
-          <div
-            className="grid gap-4"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}
-          >
-            {sorted.map((order) => (
-              <OrderTicket
-                key={order.id}
-                order={order}
-                now={now}
-                onAdvance={handleAdvance}
-                isAdvancing={advancingId === order.id}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {columns.map((col) => (
+              <div key={col.title} className="flex flex-col gap-3">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground px-1">
+                  {col.title} ({col.orders.length})
+                </h2>
+                <div className="flex flex-col gap-4">
+                  {col.orders.map((order) => (
+                    <OrderTicket
+                      key={order.id}
+                      order={order}
+                      now={now}
+                      onStartPreparation={(id) => startPrepMutation.mutate(id)}
+                      onMarkReady={(id) => markReadyMutation.mutate(id)}
+                      onComplete={(id) => completeMutation.mutate(id)}
+                      isAdvancing={advancingId === order.id}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}

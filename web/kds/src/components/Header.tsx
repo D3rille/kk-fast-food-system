@@ -4,9 +4,10 @@ interface HeaderProps {
   connected: boolean
   pending: number
   inPrep: number
+  ready: number
 }
 
-export function Header({ connected, pending, inPrep }: HeaderProps) {
+export function Header({ connected, pending, inPrep, ready }: HeaderProps) {
   const [time, setTime] = useState(new Date())
 
   useEffect(() => {
@@ -35,6 +36,12 @@ export function Header({ connected, pending, inPrep }: HeaderProps) {
             <span className="size-2 rounded-full bg-blue-400" />
             <span className="text-muted-foreground">
               {inPrep} in prep
+            </span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-purple-400" />
+            <span className="text-muted-foreground">
+              {ready} ready
             </span>
           </span>
         </div>

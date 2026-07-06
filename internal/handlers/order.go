@@ -201,6 +201,114 @@ func (h *OrderHandler) Pay(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(toPaymentResponse(payment))
 }
 
+// StartPreparation handles POST /api/v1/orders/{id}/start-preparation
+// Transitions the order from paid → in_preparation.
+func (h *OrderHandler) StartPreparation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	id := chi.URLParam(r, "id")
+
+	order, err := h.srv.StartPreparation(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrOrderNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "order not found"})
+			return
+		}
+		if errors.Is(err, service.ErrInvalidStateTransition) {
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "order is not in paid state"})
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(toOrderResponse(order))
+}
+
+// Ready handles POST /api/v1/orders/{id}/ready
+// Transitions the order from in_preparation → ready_for_pickup.
+func (h *OrderHandler) Ready(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	id := chi.URLParam(r, "id")
+
+	order, err := h.srv.MarkReady(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrOrderNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "order not found"})
+			return
+		}
+		if errors.Is(err, service.ErrInvalidStateTransition) {
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "order is not in in_preparation state"})
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(toOrderResponse(order))
+}
+
+// Complete handles POST /api/v1/orders/{id}/complete
+// Transitions the order from ready_for_pickup → completed.
+func (h *OrderHandler) Complete(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	id := chi.URLParam(r, "id")
+
+	order, err := h.srv.Complete(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrOrderNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "order not found"})
+			return
+		}
+		if errors.Is(err, service.ErrInvalidStateTransition) {
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "order is not in ready_for_pickup state"})
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(toOrderResponse(order))
+}
+
+// Cancel handles POST /api/v1/orders/{id}/cancel
+// Transitions the order to cancelled, as long as preparation hasn't started yet.
+func (h *OrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	id := chi.URLParam(r, "id")
+
+	order, err := h.srv.Cancel(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrOrderNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "order not found"})
+			return
+		}
+		if errors.Is(err, service.ErrInvalidStateTransition) {
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "order can no longer be cancelled once preparation has started"})
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(toOrderResponse(order))
+}
+
 func toOrderResponse(item *models.Order) *models.OrderResponse {
 	return &models.OrderResponse{
 		ID:            item.ID,

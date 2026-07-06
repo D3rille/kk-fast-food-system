@@ -15,3 +15,7 @@ export function payOrder(id: string, provider: string): Promise<Payment> {
     body: JSON.stringify({ provider }),
   })
 }
+
+export function cancelOrder(id: string): Promise<Order> {
+  return apiFetch<Order>(`/api/v1/orders/${id}/cancel`, { method: "POST" })
+}

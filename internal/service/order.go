@@ -38,6 +38,10 @@ type OrderService interface {
 	Delete(ctx context.Context, id string) error
 	Checkout(ctx context.Context, orderID string) (*models.Order, error)
 	ProcessPayment(ctx context.Context, orderID string, provider PaymentProvider) (*models.Payment, error)
+	StartPreparation(ctx context.Context, orderID string) (*models.Order, error)
+	MarkReady(ctx context.Context, orderID string) (*models.Order, error)
+	Complete(ctx context.Context, orderID string) (*models.Order, error)
+	Cancel(ctx context.Context, orderID string) (*models.Order, error)
 }
 
 type orderService struct {
@@ -84,10 +88,16 @@ func (s *orderService) Create(ctx context.Context, req *models.CreateOrderReques
 		return nil, fmt.Errorf("failed to generate sequential ID: %w", err)
 	}
 
+	orderNumber, err := s.repo.NextOrderNumber(ctx, req.StoreID)
+	if err != nil {
+		return nil, fmt.Errorf("service failed to generate order number: %w", err)
+	}
+
 	now := time.Now()
 	item := &models.Order{
 		ID:            id.String(),
 		StoreID:       req.StoreID,
+		OrderNumber:   orderNumber,
 		Source:        req.Source,
 		Status:        models.StatusDraft,
 		PaymentStatus: models.PaymentPending,
@@ -287,4 +297,84 @@ func (s *orderService) ProcessPayment(ctx context.Context, orderID string, provi
 	payment.Status = result.Status
 	payment.TransactionRef = result.TransactionRef
 	return payment, nil
+}
+
+// StartPreparation transitions an order from paid → in_preparation.
+func (s *orderService) StartPreparation(ctx context.Context, orderID string) (*models.Order, error) {
+	order, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("start preparation: %w: %w", ErrOrderNotFound, err)
+	}
+	if order.Status != models.StatusPaid {
+		return nil, fmt.Errorf("start preparation: order %s is in state %q: %w", orderID, order.Status, ErrInvalidStateTransition)
+	}
+	if err := s.repo.UpdateStatus(ctx, orderID, models.StatusInPreparation, order.PaymentStatus); err != nil {
+		return nil, fmt.Errorf("start preparation: failed to update order status: %w", err)
+	}
+	order.Status = models.StatusInPreparation
+	s.emit(OrderEvent{Type: "order.status_changed", OrderID: order.ID, Status: order.Status, Source: order.Source})
+	return order, nil
+}
+
+// MarkReady transitions an order from in_preparation → ready_for_pickup.
+func (s *orderService) MarkReady(ctx context.Context, orderID string) (*models.Order, error) {
+	order, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("mark ready: %w: %w", ErrOrderNotFound, err)
+	}
+	if order.Status != models.StatusInPreparation {
+		return nil, fmt.Errorf("mark ready: order %s is in state %q: %w", orderID, order.Status, ErrInvalidStateTransition)
+	}
+	if err := s.repo.UpdateStatus(ctx, orderID, models.StatusReadyForPickup, order.PaymentStatus); err != nil {
+		return nil, fmt.Errorf("mark ready: failed to update order status: %w", err)
+	}
+	order.Status = models.StatusReadyForPickup
+	s.emit(OrderEvent{Type: "order.status_changed", OrderID: order.ID, Status: order.Status, Source: order.Source})
+	return order, nil
+}
+
+// Complete transitions an order from ready_for_pickup → completed.
+func (s *orderService) Complete(ctx context.Context, orderID string) (*models.Order, error) {
+	order, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("complete: %w: %w", ErrOrderNotFound, err)
+	}
+	if order.Status != models.StatusReadyForPickup {
+		return nil, fmt.Errorf("complete: order %s is in state %q: %w", orderID, order.Status, ErrInvalidStateTransition)
+	}
+	if err := s.repo.UpdateStatus(ctx, orderID, models.StatusCompleted, order.PaymentStatus); err != nil {
+		return nil, fmt.Errorf("complete: failed to update order status: %w", err)
+	}
+	order.Status = models.StatusCompleted
+	s.emit(OrderEvent{Type: "order.status_changed", OrderID: order.ID, Status: order.Status, Source: order.Source})
+	return order, nil
+}
+
+// Cancel transitions an order to cancelled. Only orders that haven't started preparation yet
+// (draft, pending_payment, or paid) can be cancelled — once the kitchen has started cooking,
+// cancelling requires a manual process outside this endpoint. A paid order's payment_status is
+// marked refunded, since the customer no longer owes for and won't receive the order.
+func (s *orderService) Cancel(ctx context.Context, orderID string) (*models.Order, error) {
+	order, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("cancel: %w: %w", ErrOrderNotFound, err)
+	}
+	switch order.Status {
+	case models.StatusDraft, models.StatusPendingPayment, models.StatusPaid:
+	default:
+		return nil, fmt.Errorf("cancel: order %s is in state %q: %w", orderID, order.Status, ErrInvalidStateTransition)
+	}
+
+	paymentStatus := order.PaymentStatus
+	if order.Status == models.StatusPaid {
+		paymentStatus = models.PaymentRefunded
+	}
+
+	if err := s.repo.UpdateStatus(ctx, orderID, models.StatusCancelled, paymentStatus); err != nil {
+		return nil, fmt.Errorf("cancel: failed to update order status: %w", err)
+	}
+	order.Status = models.StatusCancelled
+	order.PaymentStatus = paymentStatus
+	s.emit(OrderEvent{Type: "order.status_changed", OrderID: order.ID, Status: order.Status, Source: order.Source})
+	return order, nil
 }

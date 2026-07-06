@@ -50,8 +50,4 @@ export interface OrderEvent {
   source: OrderSource
 }
 
-export const REMOVE_FROM_KITCHEN: OrderStatus[] = [
-  "ready_for_pickup",
-  "completed",
-  "cancelled",
-]
+export const REMOVE_FROM_KITCHEN: OrderStatus[] = ["completed", "cancelled"]

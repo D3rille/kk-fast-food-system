@@ -7,6 +7,6 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 RUN pnpm install --frozen-lockfile
 
-EXPOSE 5173
+EXPOSE 3001
 
-CMD ["pnpm", "dev", "--host"]
+CMD ["pnpm", "dev", "--host", "--port", "3001"]

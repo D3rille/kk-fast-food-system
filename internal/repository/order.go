@@ -12,6 +12,10 @@ import (
 // OrderRepository defines all database access methods for order.
 type OrderRepository interface {
 	Create(ctx context.Context, item *models.Order) error
+	// NextOrderNumber atomically returns the next sequential order number for
+	// the given store, scoped to the current date. The counter resets to 1
+	// at the start of each new day.
+	NextOrderNumber(ctx context.Context, storeID string) (int, error)
 	GetByID(ctx context.Context, id string) (*models.Order, error)
 	// List returns orders sorted oldest-first. Pass a non-empty status to filter by that status.
 	List(ctx context.Context, status string) ([]*models.Order, error)
@@ -49,6 +53,21 @@ func (r *postgresOrderRepository) Create(ctx context.Context, item *models.Order
 		return fmt.Errorf("failed to create order: %w", err)
 	}
 	return nil
+}
+
+func (r *postgresOrderRepository) NextOrderNumber(ctx context.Context, storeID string) (int, error) {
+	query := `
+		INSERT INTO order_daily_counters (store_id, order_date, last_number)
+		VALUES ($1, CURRENT_DATE, 1)
+		ON CONFLICT (store_id, order_date)
+		DO UPDATE SET last_number = order_daily_counters.last_number + 1
+		RETURNING last_number
+	`
+	var n int
+	if err := r.db.QueryRow(ctx, query, storeID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("failed to generate next order number: %w", err)
+	}
+	return n, nil
 }
 
 func (r *postgresOrderRepository) GetByID(ctx context.Context, id string) (*models.Order, error) {

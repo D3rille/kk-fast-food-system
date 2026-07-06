@@ -11,10 +11,10 @@ type CreateOrderItemRequest struct {
 }
 
 // CreateOrderRequest defines the API payload for order creation.
-// Status and PaymentStatus are not accepted from the client — the service always creates orders as draft/pending.
+// Status, PaymentStatus, and OrderNumber are not accepted from the client — the service always
+// creates orders as draft/pending and generates the order number server-side.
 type CreateOrderRequest struct {
 	StoreID     string                   `json:"store_id"     validate:"required"`
-	OrderNumber int                      `json:"order_number"`
 	Source      OrderSource              `json:"source"       validate:"required"`
 	TotalAmount int64                    `json:"total_amount" validate:"required"`
 	Items       []CreateOrderItemRequest `json:"items"`

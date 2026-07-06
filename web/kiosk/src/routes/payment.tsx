@@ -4,6 +4,7 @@ import { IconArrowLeft, IconReceipt, IconAlertCircle, IconLoader2 } from "@table
 import { createOrder, checkoutOrder } from "@/api/orders"
 import { useCart } from "@/contexts/cart"
 import { Button } from "@/components/ui/button"
+import { CancelOrderButton } from "@/components/CancelOrderButton"
 
 export const Route = createFileRoute("/payment")({ component: PaymentScreen })
 
@@ -71,10 +72,11 @@ function PaymentScreen() {
         >
           <IconArrowLeft size={20} />
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="font-heading font-bold text-xl">Review Order</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Confirm and place your order</p>
         </div>
+        <CancelOrderButton disabled={state === "processing"} />
       </header>
 
       <main className="flex flex-col flex-1 px-6 py-6 gap-6 overflow-y-auto">

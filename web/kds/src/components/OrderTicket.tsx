@@ -1,11 +1,19 @@
-import type { OrderDetail, OrderStatus } from "@/types/api"
+import type { OrderDetail } from "@/types/api"
 import { Button } from "@/components/ui/button"
 
 interface OrderTicketProps {
   order: OrderDetail
   now: number
-  onAdvance: (id: string, status: OrderStatus) => void
+  onStartPreparation: (id: string) => void
+  onMarkReady: (id: string) => void
+  onComplete: (id: string) => void
   isAdvancing: boolean
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  paid: "Queued",
+  in_preparation: "In Prep",
+  ready_for_pickup: "Ready",
 }
 
 function getElapsedSeconds(createdAt: string, now: number): number {
@@ -38,7 +46,14 @@ const SOURCE_STYLE: Record<string, { bg: string; color: string; border: string }
   online: { bg: "rgba(249,115,22,0.15)", color: "#fdba74", border: "rgba(249,115,22,0.35)" },
 }
 
-export function OrderTicket({ order, now, onAdvance, isAdvancing }: OrderTicketProps) {
+export function OrderTicket({
+  order,
+  now,
+  onStartPreparation,
+  onMarkReady,
+  onComplete,
+  isAdvancing,
+}: OrderTicketProps) {
   const elapsed = getElapsedSeconds(order.created_at, now)
   const agingColor = getAgingColor(elapsed)
   const srcLabel = SOURCE_LABELS[order.source] ?? order.source.toUpperCase()
@@ -48,7 +63,7 @@ export function OrderTicket({ order, now, onAdvance, isAdvancing }: OrderTicketP
     border: "rgba(107,114,128,0.35)",
   }
   const totalPesos = (order.total_amount / 100).toFixed(2)
-  const isQueued = order.status === "paid"
+  const statusLabel = STATUS_LABELS[order.status] ?? order.status
 
   return (
     <div
@@ -109,31 +124,49 @@ export function OrderTicket({ order, now, onAdvance, isAdvancing }: OrderTicketP
         <span className="text-lg font-semibold text-foreground">₱{totalPesos}</span>
         <span
           className="text-xs font-bold uppercase tracking-wide"
-          style={{ color: isQueued ? "#fbbf24" : "#60a5fa" }}
+          style={{
+            color:
+              order.status === "paid"
+                ? "#fbbf24"
+                : order.status === "in_preparation"
+                  ? "#60a5fa"
+                  : "#c084fc",
+          }}
         >
-          {isQueued ? "Queued" : "In Prep"}
+          {statusLabel}
         </span>
       </div>
 
       {/* Action button */}
       <div className="px-3 pb-3">
-        {isQueued ? (
+        {order.status === "paid" && (
           <Button
             className="w-full font-bold h-11 text-white"
             style={{ backgroundColor: "#2563eb" }}
-            onClick={() => onAdvance(order.id, "in_preparation")}
+            onClick={() => onStartPreparation(order.id)}
             disabled={isAdvancing}
           >
             Start Prep
           </Button>
-        ) : (
+        )}
+        {order.status === "in_preparation" && (
           <Button
             className="w-full font-bold h-11 text-white"
             style={{ backgroundColor: "#16a34a" }}
-            onClick={() => onAdvance(order.id, "ready_for_pickup")}
+            onClick={() => onMarkReady(order.id)}
             disabled={isAdvancing}
           >
             Ready for Pickup
+          </Button>
+        )}
+        {order.status === "ready_for_pickup" && (
+          <Button
+            className="w-full font-bold h-11 text-white"
+            style={{ backgroundColor: "#9333ea" }}
+            onClick={() => onComplete(order.id)}
+            disabled={isAdvancing}
+          >
+            Complete / Picked Up
           </Button>
         )}
       </div>

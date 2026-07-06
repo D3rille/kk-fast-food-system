@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/auth"
-import { fetchOrderDetail, payOrder } from "@/api/orders"
+import { fetchOrderDetail, payOrder, cancelOrder } from "@/api/orders"
 import { Button } from "@/components/ui/button"
 import type { OrderSource } from "@/types/api"
 
@@ -34,6 +34,8 @@ function OrderDetailPage() {
 
   const [cashInput, setCashInput] = useState("")
   const [payError, setPayError] = useState("")
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
+  const [cancelError, setCancelError] = useState("")
 
   useEffect(() => {
     if (!token) {
@@ -63,6 +65,19 @@ function OrderDetailPage() {
     },
   })
 
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelOrder(orderId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["orders", "pending"] })
+      void queryClient.removeQueries({ queryKey: ["order", orderId] })
+      void navigate({ to: "/orders" })
+    },
+    onError: (err: Error) => {
+      setCancelError(err.message)
+      setConfirmingCancel(false)
+    },
+  })
+
   if (!token) return null
 
   if (isLoading) {
@@ -88,6 +103,8 @@ function OrderDetailPage() {
   const cashPesos = parseFloat(cashInput) || 0
   const changePesos = cashPesos - totalPesos
   const canPay = cashPesos >= totalPesos && order.status === "pending_payment"
+  const canCancel =
+    order.status === "draft" || order.status === "pending_payment" || order.status === "paid"
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -235,6 +252,49 @@ function OrderDetailPage() {
             >
               {payMutation.isPending ? "Processing…" : "Confirm Payment"}
             </Button>
+
+            {cancelError && (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {cancelError}
+              </p>
+            )}
+
+            {canCancel && !confirmingCancel && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setCancelError("")
+                  setConfirmingCancel(true)
+                }}
+              >
+                Cancel this order
+              </Button>
+            )}
+
+            {canCancel && confirmingCancel && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                <p className="text-sm font-medium text-center mb-3">Cancel this order?</p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    disabled={cancelMutation.isPending}
+                    onClick={() => setConfirmingCancel(false)}
+                  >
+                    Keep Order
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    disabled={cancelMutation.isPending}
+                    onClick={() => cancelMutation.mutate()}
+                  >
+                    {cancelMutation.isPending ? "Cancelling…" : "Yes, Cancel"}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {order.status !== "pending_payment" && (
               <p className="text-center text-xs text-muted-foreground">

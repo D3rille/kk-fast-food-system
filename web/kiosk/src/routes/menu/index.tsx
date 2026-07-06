@@ -8,6 +8,7 @@ import { ProductCard } from "@/components/menu/ProductCard"
 import { ProductCustomizeModal } from "@/components/menu/ProductCustomizeModal"
 import { useCart } from "@/contexts/cart"
 import { Button } from "@/components/ui/button"
+import { CancelOrderButton } from "@/components/CancelOrderButton"
 import type { ModifierGroup, Product, SelectedModifier } from "@/types/api"
 
 export const Route = createFileRoute("/menu/")({ component: MenuScreen })
@@ -103,30 +104,33 @@ function MenuScreen() {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="lg"
-          className="relative gap-2 min-h-11"
-          onClick={() => navigate({ to: "/cart" })}
-        >
-          <IconShoppingCart size={18} />
-          {itemCount > 0 ? (
-            <>
-              <span className="font-mono font-bold text-sm tabular-nums">{itemCount}</span>
-              <span className="text-muted-foreground text-sm">·</span>
-              <span className="font-mono font-bold text-sm tabular-nums text-primary">
-                ₱{(total / 100).toFixed(0)}
+        <div className="flex items-center gap-2">
+          <CancelOrderButton />
+          <Button
+            variant="outline"
+            size="lg"
+            className="relative gap-2 min-h-11"
+            onClick={() => navigate({ to: "/cart" })}
+          >
+            <IconShoppingCart size={18} />
+            {itemCount > 0 ? (
+              <>
+                <span className="font-mono font-bold text-sm tabular-nums">{itemCount}</span>
+                <span className="text-muted-foreground text-sm">·</span>
+                <span className="font-mono font-bold text-sm tabular-nums text-primary">
+                  ₱{(total / 100).toFixed(0)}
+                </span>
+              </>
+            ) : (
+              <span className="font-semibold text-sm">Cart</span>
+            )}
+            {itemCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                {itemCount > 9 ? "9+" : itemCount}
               </span>
-            </>
-          ) : (
-            <span className="font-semibold text-sm">Cart</span>
-          )}
-          {itemCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-              {itemCount > 9 ? "9+" : itemCount}
-            </span>
-          )}
-        </Button>
+            )}
+          </Button>
+        </div>
       </header>
 
       <div className="px-6 pt-4 pb-3 shrink-0 bg-card border-b border-border">

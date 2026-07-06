@@ -186,6 +186,16 @@ func main() {
 				r.Delete("/{id}", orderHandler.Delete)
 				r.Post("/{id}/checkout", orderHandler.Checkout)
 				r.Post("/{id}/pay", orderHandler.Pay)
+				r.Post("/{id}/cancel", orderHandler.Cancel)
+
+				// Kitchen-driven state transitions — role-gated to kitchen/manager/admin only,
+				// unlike the rest of this route group which currently has no role enforcement.
+				r.With(middleware.RequireRole(models.RoleKitchen, models.RoleManager, models.RoleAdmin)).
+					Post("/{id}/start-preparation", orderHandler.StartPreparation)
+				r.With(middleware.RequireRole(models.RoleKitchen, models.RoleManager, models.RoleAdmin)).
+					Post("/{id}/ready", orderHandler.Ready)
+				r.With(middleware.RequireRole(models.RoleKitchen, models.RoleManager, models.RoleAdmin)).
+					Post("/{id}/complete", orderHandler.Complete)
 			})
 		})
 	})

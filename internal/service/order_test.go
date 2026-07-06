@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/D3rille/kk-fast-food-system/internal/models"
 	"github.com/D3rille/kk-fast-food-system/internal/repository"
@@ -13,16 +14,26 @@ import (
 // --- Mocks ---
 
 type mockOrderRepository struct {
-	orders map[string]*models.Order
+	orders        map[string]*models.Order
+	dailyCounters map[string]int
 }
 
 func newMockOrderRepository() *mockOrderRepository {
-	return &mockOrderRepository{orders: make(map[string]*models.Order)}
+	return &mockOrderRepository{
+		orders:        make(map[string]*models.Order),
+		dailyCounters: make(map[string]int),
+	}
 }
 
 func (m *mockOrderRepository) Create(_ context.Context, item *models.Order) error {
 	m.orders[item.ID] = item
 	return nil
+}
+
+func (m *mockOrderRepository) NextOrderNumber(_ context.Context, storeID string) (int, error) {
+	key := storeID + "|" + time.Now().Format("2006-01-02")
+	m.dailyCounters[key]++
+	return m.dailyCounters[key], nil
 }
 
 func (m *mockOrderRepository) GetByID(_ context.Context, id string) (*models.Order, error) {
@@ -156,6 +167,39 @@ func TestOrderService_Create(t *testing.T) {
 	}
 	if order.TotalAmount != 10000 {
 		t.Errorf("expected total_amount 10000, got %d", order.TotalAmount)
+	}
+}
+
+func TestOrderService_Create_OrderNumberIncrementsPerStore(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	for i, want := range []int{1, 2, 3} {
+		order, err := svc.Create(context.Background(), &models.CreateOrderRequest{
+			StoreID:     "store-1",
+			Source:      models.SourceKiosk,
+			TotalAmount: 10000,
+		})
+		if err != nil {
+			t.Fatalf("create %d: expected no error, got %v", i, err)
+		}
+		if order.OrderNumber != want {
+			t.Errorf("create %d: expected order_number %d, got %d", i, want, order.OrderNumber)
+		}
+	}
+
+	// A different store's counter is independent and also starts at 1.
+	otherStoreOrder, err := svc.Create(context.Background(), &models.CreateOrderRequest{
+		StoreID:     "store-2",
+		Source:      models.SourceKiosk,
+		TotalAmount: 10000,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if otherStoreOrder.OrderNumber != 1 {
+		t.Errorf("expected order_number 1 for a new store, got %d", otherStoreOrder.OrderNumber)
 	}
 }
 
@@ -300,5 +344,231 @@ func TestOrderService_ProcessPayment_ChargeFailure(t *testing.T) {
 	}
 	if failedPayment.Status != models.PaymentFailed {
 		t.Errorf("expected payment record status failed, got %q", failedPayment.Status)
+	}
+}
+
+func TestOrderService_StartPreparation_Success(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+	orderRepo.orders[order.ID].Status = models.StatusPaid
+
+	updated, err := svc.StartPreparation(context.Background(), order.ID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Status != models.StatusInPreparation {
+		t.Errorf("expected status in_preparation, got %q", updated.Status)
+	}
+	persisted := orderRepo.orders[order.ID]
+	if persisted.Status != models.StatusInPreparation {
+		t.Errorf("persisted status should be in_preparation, got %q", persisted.Status)
+	}
+}
+
+func TestOrderService_StartPreparation_WrongState(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+	// Order is still draft, not paid
+
+	_, err := svc.StartPreparation(context.Background(), order.ID)
+	if !errors.Is(err, service.ErrInvalidStateTransition) {
+		t.Errorf("expected ErrInvalidStateTransition, got %v", err)
+	}
+}
+
+func TestOrderService_StartPreparation_OrderNotFound(t *testing.T) {
+	svc := service.NewOrderService(newMockOrderRepository(), newMockPaymentRepository())
+
+	_, err := svc.StartPreparation(context.Background(), "nonexistent-id")
+	if err == nil {
+		t.Fatal("expected error for nonexistent order, got nil")
+	}
+}
+
+func TestOrderService_MarkReady_Success(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+	orderRepo.orders[order.ID].Status = models.StatusInPreparation
+
+	updated, err := svc.MarkReady(context.Background(), order.ID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Status != models.StatusReadyForPickup {
+		t.Errorf("expected status ready_for_pickup, got %q", updated.Status)
+	}
+	persisted := orderRepo.orders[order.ID]
+	if persisted.Status != models.StatusReadyForPickup {
+		t.Errorf("persisted status should be ready_for_pickup, got %q", persisted.Status)
+	}
+}
+
+func TestOrderService_MarkReady_WrongState(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+	orderRepo.orders[order.ID].Status = models.StatusPaid
+	// Order is paid but not yet in_preparation
+
+	_, err := svc.MarkReady(context.Background(), order.ID)
+	if !errors.Is(err, service.ErrInvalidStateTransition) {
+		t.Errorf("expected ErrInvalidStateTransition, got %v", err)
+	}
+}
+
+func TestOrderService_MarkReady_OrderNotFound(t *testing.T) {
+	svc := service.NewOrderService(newMockOrderRepository(), newMockPaymentRepository())
+
+	_, err := svc.MarkReady(context.Background(), "nonexistent-id")
+	if err == nil {
+		t.Fatal("expected error for nonexistent order, got nil")
+	}
+}
+
+func TestOrderService_Complete_Success(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+	orderRepo.orders[order.ID].Status = models.StatusReadyForPickup
+
+	updated, err := svc.Complete(context.Background(), order.ID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Status != models.StatusCompleted {
+		t.Errorf("expected status completed, got %q", updated.Status)
+	}
+	persisted := orderRepo.orders[order.ID]
+	if persisted.Status != models.StatusCompleted {
+		t.Errorf("persisted status should be completed, got %q", persisted.Status)
+	}
+}
+
+func TestOrderService_Complete_WrongState(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+	orderRepo.orders[order.ID].Status = models.StatusInPreparation
+	// Order is in_preparation but not yet ready_for_pickup
+
+	_, err := svc.Complete(context.Background(), order.ID)
+	if !errors.Is(err, service.ErrInvalidStateTransition) {
+		t.Errorf("expected ErrInvalidStateTransition, got %v", err)
+	}
+}
+
+func TestOrderService_Complete_OrderNotFound(t *testing.T) {
+	svc := service.NewOrderService(newMockOrderRepository(), newMockPaymentRepository())
+
+	_, err := svc.Complete(context.Background(), "nonexistent-id")
+	if err == nil {
+		t.Fatal("expected error for nonexistent order, got nil")
+	}
+}
+
+func TestOrderService_Cancel_FromDraft(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+
+	updated, err := svc.Cancel(context.Background(), order.ID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Status != models.StatusCancelled {
+		t.Errorf("expected status cancelled, got %q", updated.Status)
+	}
+	persisted := orderRepo.orders[order.ID]
+	if persisted.Status != models.StatusCancelled {
+		t.Errorf("persisted status should be cancelled, got %q", persisted.Status)
+	}
+}
+
+func TestOrderService_Cancel_FromPendingPayment(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+	_, _ = svc.Checkout(context.Background(), order.ID)
+
+	updated, err := svc.Cancel(context.Background(), order.ID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Status != models.StatusCancelled {
+		t.Errorf("expected status cancelled, got %q", updated.Status)
+	}
+}
+
+func TestOrderService_Cancel_FromPaid_RefundsPayment(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	order := seedDraftOrder(t, orderRepo, svc)
+	orderRepo.orders[order.ID].Status = models.StatusPaid
+	orderRepo.orders[order.ID].PaymentStatus = models.PaymentCompleted
+
+	updated, err := svc.Cancel(context.Background(), order.ID)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Status != models.StatusCancelled {
+		t.Errorf("expected status cancelled, got %q", updated.Status)
+	}
+	if updated.PaymentStatus != models.PaymentRefunded {
+		t.Errorf("expected payment_status refunded, got %q", updated.PaymentStatus)
+	}
+	persisted := orderRepo.orders[order.ID]
+	if persisted.PaymentStatus != models.PaymentRefunded {
+		t.Errorf("persisted payment_status should be refunded, got %q", persisted.PaymentStatus)
+	}
+}
+
+func TestOrderService_Cancel_WrongState(t *testing.T) {
+	orderRepo := newMockOrderRepository()
+	paymentRepo := newMockPaymentRepository()
+	svc := service.NewOrderService(orderRepo, paymentRepo)
+
+	for _, status := range []models.OrderStatus{
+		models.StatusInPreparation,
+		models.StatusReadyForPickup,
+		models.StatusCompleted,
+		models.StatusCancelled,
+	} {
+		order := seedDraftOrder(t, orderRepo, svc)
+		orderRepo.orders[order.ID].Status = status
+
+		_, err := svc.Cancel(context.Background(), order.ID)
+		if !errors.Is(err, service.ErrInvalidStateTransition) {
+			t.Errorf("status %q: expected ErrInvalidStateTransition, got %v", status, err)
+		}
+	}
+}
+
+func TestOrderService_Cancel_OrderNotFound(t *testing.T) {
+	svc := service.NewOrderService(newMockOrderRepository(), newMockPaymentRepository())
+
+	_, err := svc.Cancel(context.Background(), "nonexistent-id")
+	if err == nil {
+		t.Fatal("expected error for nonexistent order, got nil")
 	}
 }
