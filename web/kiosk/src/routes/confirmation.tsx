@@ -1,6 +1,8 @@
+import { useEffect } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { IconCircleCheckFilled } from "@tabler/icons-react"
 import { Button } from "@/components/ui/button"
+import { useCart } from "@/contexts/cart"
 
 export const Route = createFileRoute("/confirmation")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -12,6 +14,13 @@ export const Route = createFileRoute("/confirmation")({
 function ConfirmationScreen() {
   const navigate = useNavigate()
   const { orderNumber } = Route.useSearch()
+  const { dispatch } = useCart()
+
+  // Clearing the cart here (rather than right before navigating away from /payment) means the
+  // payment screen's "cart is empty" redirect guard never races the navigation to this screen.
+  useEffect(() => {
+    dispatch({ type: "CLEAR_CART" })
+  }, [dispatch])
 
   return (
     <div
