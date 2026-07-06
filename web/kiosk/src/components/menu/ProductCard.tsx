@@ -1,4 +1,4 @@
-import { IconPlus } from "@tabler/icons-react"
+import { IconLoader2, IconPlus } from "@tabler/icons-react"
 import type { Product } from "@/types/api"
 import { Button } from "@/components/ui/button"
 import { resolveImageUrl } from "@/api/client"
@@ -6,13 +6,14 @@ import { resolveImageUrl } from "@/api/client"
 interface ProductCardProps {
   product: Product
   onAdd: (product: Product) => void
+  isLoading?: boolean
 }
 
 function formatPrice(centavos: number): string {
   return `₱${(centavos / 100).toFixed(2)}`
 }
 
-export function ProductCard({ product, onAdd }: ProductCardProps) {
+export function ProductCard({ product, onAdd, isLoading }: ProductCardProps) {
   return (
     <div className="bg-card rounded-2xl border border-border flex flex-col overflow-hidden shadow-sm transition-shadow hover:shadow-md active:scale-[0.98] transition-transform">
       <div className="relative aspect-square bg-secondary/50 w-full shrink-0 overflow-hidden">
@@ -54,10 +55,10 @@ export function ProductCard({ product, onAdd }: ProductCardProps) {
         <Button
           size="lg"
           onClick={() => onAdd(product)}
-          disabled={!product.is_available}
+          disabled={!product.is_available || isLoading}
           className="w-full gap-1.5"
         >
-          <IconPlus size={16} />
+          {isLoading ? <IconLoader2 size={16} className="animate-spin" /> : <IconPlus size={16} />}
           Add
         </Button>
       </div>

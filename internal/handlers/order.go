@@ -34,6 +34,11 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	item, err := h.srv.Create(r.Context(), &req)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidModifierSelection) {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return

@@ -109,8 +109,16 @@ type ModifierOption struct {
 	ModifierGroupID string    `json:"modifier_group_id" db:"modifier_group_id"`
 	Name            string    `json:"name" db:"name"`
 	ExtraPrice      int64     `json:"extra_price" db:"extra_price"`
+	IsDefault       bool      `json:"is_default" db:"is_default"`
 	CreatedAt       time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// ModifierGroupWithOptions is a ModifierGroup along with its available options,
+// as returned by queries that join modifier_groups to modifier_options.
+type ModifierGroupWithOptions struct {
+	ModifierGroup
+	Options []ModifierOption `json:"options"`
 }
 
 type ProductModifierGroup struct {
@@ -138,6 +146,9 @@ type OrderItem struct {
 	UnitPrice          int64     `json:"unit_price" db:"unit_price"`
 	CalculatedSubtotal int64     `json:"calculated_subtotal" db:"calculated_subtotal"`
 	CreatedAt          time.Time `json:"created_at" db:"created_at"`
+	// ModifierOptionIDs is not persisted on order_items itself — the repository
+	// uses it to populate the order_item_modifiers join table on insert.
+	ModifierOptionIDs []string `json:"-" db:"-"`
 }
 
 type OrderItemModifier struct {

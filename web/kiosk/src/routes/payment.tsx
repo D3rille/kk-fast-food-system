@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { IconArrowLeft, IconReceipt, IconAlertCircle, IconLoader2 } from "@tabler/icons-react"
 import { createOrder, checkoutOrder } from "@/api/orders"
@@ -15,14 +15,22 @@ type PlaceState = "idle" | "processing" | "error"
 
 function PaymentScreen() {
   const navigate = useNavigate()
-  const { items, total, dispatch } = useCart()
+  const { items, total } = useCart()
   const [state, setState] = useState<PlaceState>("idle")
   const [errorMessage, setErrorMessage] = useState<string>("")
 
   const storeId = import.meta.env.VITE_STORE_ID as string | undefined
 
+  // Redirect only when the cart is empty on its own (e.g. a direct visit or a back/forward
+  // navigation) — the cart is cleared from the confirmation screen, not here, so a successful
+  // order never races this guard against the navigate to /confirmation below.
+  useEffect(() => {
+    if (items.length === 0) {
+      navigate({ to: "/menu" })
+    }
+  }, [items.length, navigate])
+
   if (items.length === 0) {
-    navigate({ to: "/menu" })
     return null
   }
 
@@ -35,11 +43,11 @@ function PaymentScreen() {
       const orderItems = items.map((item) => ({
         product_id: item.product.id,
         quantity: item.quantity,
-        unit_price: item.product.base_price,
+        unit_price: item.unitPrice,
+        modifier_option_ids: item.selectedModifiers.map((m) => m.optionId),
       }))
       const order = await createOrder(storeId ?? "", total, orderItems)
       await checkoutOrder(order.id)
-      dispatch({ type: "CLEAR_CART" })
       navigate({
         to: "/confirmation",
         search: { orderNumber: order.order_number },
@@ -83,14 +91,19 @@ function PaymentScreen() {
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
             Order Summary
           </h2>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {items.map((item) => (
-              <div key={item.product.id} className="flex justify-between text-sm">
+              <div key={item.id} className="flex justify-between text-sm">
                 <span className="truncate text-foreground/75">
                   {item.quantity}× {item.product.name}
+                  {item.selectedModifiers.length > 0 && (
+                    <span className="block text-xs text-muted-foreground/80 mt-0.5">
+                      {item.selectedModifiers.map((m) => m.name).join(", ")}
+                    </span>
+                  )}
                 </span>
                 <span className="font-mono font-medium shrink-0 ml-4 tabular-nums">
-                  {formatPrice(item.product.base_price * item.quantity)}
+                  {formatPrice(item.unitPrice * item.quantity)}
                 </span>
               </div>
             ))}

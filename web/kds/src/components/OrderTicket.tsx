@@ -1,8 +1,8 @@
-import type { Order, OrderStatus } from "@/types/api"
+import type { OrderDetail, OrderStatus } from "@/types/api"
 import { Button } from "@/components/ui/button"
 
 interface OrderTicketProps {
-  order: Order
+  order: OrderDetail
   now: number
   onAdvance: (id: string, status: OrderStatus) => void
   isAdvancing: boolean
@@ -81,6 +81,26 @@ export function OrderTicket({ order, now, onAdvance, isAdvancing }: OrderTicketP
           {formatElapsed(elapsed)}
         </span>
       </div>
+
+      <div className="border-t border-border" />
+
+      {/* Items + modifiers — modifiers are bolded so the kitchen never misses a customization */}
+      {order.items.length > 0 && (
+        <div className="flex flex-col divide-y divide-border/60 px-4">
+          {order.items.map((item) => (
+            <div key={item.id} className="py-2">
+              <p className="text-sm font-semibold text-foreground">
+                {item.quantity}× {item.product_name}
+              </p>
+              {item.modifiers.length > 0 && (
+                <p className="mt-0.5 text-xs font-bold uppercase tracking-wide" style={{ color: "#ef4444" }}>
+                  {item.modifiers.map((m) => m.name).join(" · ")}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="border-t border-border" />
 

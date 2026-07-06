@@ -41,10 +41,12 @@ type OrderService interface {
 }
 
 type orderService struct {
-	repo        repository.OrderRepository
-	itemRepo    repository.OrderItemRepository
-	paymentRepo repository.PaymentRepository
-	broadcaster EventBroadcaster
+	repo         repository.OrderRepository
+	itemRepo     repository.OrderItemRepository
+	paymentRepo  repository.PaymentRepository
+	productRepo  repository.ProductRepository
+	modifierRepo repository.ModifierRepository
+	broadcaster  EventBroadcaster
 }
 
 // NewOrderService instantiates a new OrderService.
@@ -58,12 +60,15 @@ func NewOrderService(repo repository.OrderRepository, paymentRepo repository.Pay
 }
 
 // NewOrderServiceWithItems instantiates an OrderService that also persists order line items.
-func NewOrderServiceWithItems(repo repository.OrderRepository, itemRepo repository.OrderItemRepository, paymentRepo repository.PaymentRepository, broadcaster ...EventBroadcaster) OrderService {
+// productRepo and modifierRepo are used to recompute each item's price from the product's base
+// price plus any selected modifier options, and to validate selections against each modifier
+// group's min/max selection rules.
+func NewOrderServiceWithItems(repo repository.OrderRepository, itemRepo repository.OrderItemRepository, paymentRepo repository.PaymentRepository, productRepo repository.ProductRepository, modifierRepo repository.ModifierRepository, broadcaster ...EventBroadcaster) OrderService {
 	var b EventBroadcaster
 	if len(broadcaster) > 0 {
 		b = broadcaster[0]
 	}
-	return &orderService{repo: repo, itemRepo: itemRepo, paymentRepo: paymentRepo, broadcaster: b}
+	return &orderService{repo: repo, itemRepo: itemRepo, paymentRepo: paymentRepo, productRepo: productRepo, modifierRepo: modifierRepo, broadcaster: b}
 }
 
 func (s *orderService) emit(event OrderEvent) {
@@ -102,14 +107,24 @@ func (s *orderService) Create(ctx context.Context, req *models.CreateOrderReques
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate order item ID: %w", err)
 			}
+
+			unitPrice := ri.UnitPrice
+			if s.productRepo != nil && s.modifierRepo != nil {
+				unitPrice, err = s.priceItem(ctx, ri.ProductID, ri.ModifierOptionIDs)
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			orderItems = append(orderItems, &models.OrderItem{
 				ID:                 oid.String(),
 				OrderID:            item.ID,
 				ProductID:          ri.ProductID,
 				Quantity:           ri.Quantity,
-				UnitPrice:          ri.UnitPrice,
-				CalculatedSubtotal: ri.UnitPrice * int64(ri.Quantity),
+				UnitPrice:          unitPrice,
+				CalculatedSubtotal: unitPrice * int64(ri.Quantity),
 				CreatedAt:          now,
+				ModifierOptionIDs:  ri.ModifierOptionIDs,
 			})
 		}
 		if err := s.itemRepo.CreateBatch(ctx, orderItems); err != nil {
@@ -119,6 +134,26 @@ func (s *orderService) Create(ctx context.Context, req *models.CreateOrderReques
 
 	s.emit(OrderEvent{Type: "order.created", OrderID: item.ID, Status: item.Status, Source: item.Source})
 	return item, nil
+}
+
+// priceItem recomputes an order item's unit price from the product's current base price plus
+// the extra price of its selected modifier options, after validating the selections satisfy
+// every attached modifier group's min/max selection rules. This keeps pricing authoritative on
+// the server rather than trusting the client-supplied unit price.
+func (s *orderService) priceItem(ctx context.Context, productID string, selectedOptionIDs []string) (int64, error) {
+	product, err := s.productRepo.GetByID(ctx, productID)
+	if err != nil {
+		return 0, fmt.Errorf("service failed to price order item: %w", err)
+	}
+	groups, err := s.modifierRepo.ListGroupsForProduct(ctx, productID)
+	if err != nil {
+		return 0, fmt.Errorf("service failed to load modifier groups: %w", err)
+	}
+	extra, err := ValidateAndPriceSelections(groups, selectedOptionIDs)
+	if err != nil {
+		return 0, err
+	}
+	return product.BasePrice + extra, nil
 }
 
 func (s *orderService) GetByID(ctx context.Context, id string) (*models.OrderDetailResponse, error) {

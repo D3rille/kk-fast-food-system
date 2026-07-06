@@ -18,8 +18,13 @@ export function CartItem({ item, onIncrement, onDecrement, onRemove }: CartItemP
     <div className="flex items-center gap-3 py-4 border-b border-border last:border-0">
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-sm leading-snug line-clamp-2">{item.product.name}</p>
+        {item.selectedModifiers.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+            {item.selectedModifiers.map((m) => m.name).join(", ")}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground font-mono mt-0.5">
-          {formatPrice(item.product.base_price)} each
+          {formatPrice(item.unitPrice)} each
         </p>
       </div>
 
@@ -47,7 +52,7 @@ export function CartItem({ item, onIncrement, onDecrement, onRemove }: CartItemP
 
       <div className="text-right shrink-0 min-w-[68px]">
         <p className="font-mono font-bold text-sm text-primary">
-          {formatPrice(item.product.base_price * item.quantity)}
+          {formatPrice(item.unitPrice * item.quantity)}
         </p>
       </div>
 
