@@ -47,8 +47,8 @@ type ModifierOptionResponse struct {
 type ModifierGroupResponse struct {
 	ID           string                   `json:"id"`
 	Name         string                   `json:"name"`
+	Options      []ModifierOptionResponse `json:"options"`
 	MinSelection int                      `json:"min_selection"`
 	MaxSelection int                      `json:"max_selection"`
 	IsRequired   bool                     `json:"is_required"`
-	Options      []ModifierOptionResponse `json:"options"`
 }

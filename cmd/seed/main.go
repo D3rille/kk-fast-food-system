@@ -106,9 +106,9 @@ type seedModifierOption struct {
 type seedModifierGroup struct {
 	id           string
 	name         string
+	options      []seedModifierOption
 	minSelection int
 	maxSelection int
-	options      []seedModifierOption
 }
 
 // Required groups (minSelection >= 1) always carry exactly one isDefault option, so the kiosk
@@ -234,17 +234,17 @@ func seed(ctx context.Context, pool *pgxpool.Pool) error {
 		{kitchenID, "kitchen", "kitchen123", "kitchen"},
 	}
 	for _, u := range users {
-		hash, err := hashPassword(u.password)
-		if err != nil {
-			return fmt.Errorf("hash password for %s: %w", u.username, err)
+		hash, hashErr := hashPassword(u.password)
+		if hashErr != nil {
+			return fmt.Errorf("hash password for %s: %w", u.username, hashErr)
 		}
-		_, err = pool.Exec(ctx, `
+		_, hashErr = pool.Exec(ctx, `
 			INSERT INTO users (id, store_id, username, password_hash, role, is_active, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())
 			ON CONFLICT (username) DO UPDATE SET id = EXCLUDED.id, password_hash = EXCLUDED.password_hash, store_id = EXCLUDED.store_id, updated_at = NOW()
 		`, u.id, storeID, u.username, hash, u.role)
-		if err != nil {
-			return fmt.Errorf("seed user %s: %w", u.username, err)
+		if hashErr != nil {
+			return fmt.Errorf("seed user %s: %w", u.username, hashErr)
 		}
 	}
 	fmt.Printf("  ✓ %d users\n", len(users))
@@ -328,12 +328,18 @@ func seed(ctx context.Context, pool *pgxpool.Pool) error {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		log.Printf("load config: %v", err)
+		return 1
 	}
 	if cfg.Database.URL == "" {
-		log.Fatal("DATABASE_URL is not set")
+		log.Print("DATABASE_URL is not set")
+		return 1
 	}
 
 	ctx := context.Background()
@@ -341,13 +347,15 @@ func main() {
 
 	pool, err := database.New(ctx, cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns, logger)
 	if err != nil {
-		log.Fatalf("connect to database: %v", err)
+		log.Printf("connect to database: %v", err)
+		return 1
 	}
 	defer pool.Close()
 
 	fmt.Println("Seeding mock data...")
 	if err := seed(ctx, pool); err != nil {
-		log.Fatalf("seed: %v", err)
+		log.Print(err)
+		return 1
 	}
 
 	fmt.Println()
@@ -366,4 +374,6 @@ func main() {
 	fmt.Printf("  VITE_STORE_ID=%s\n", storeID)
 	fmt.Println("  VITE_KIOSK_USERNAME=kiosk")
 	fmt.Println("  VITE_KIOSK_PASSWORD=kiosk123")
+
+	return 0
 }

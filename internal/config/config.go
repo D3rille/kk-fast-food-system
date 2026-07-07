@@ -8,11 +8,11 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
 	App      AppConfig      `mapstructure:"app"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
+	Database DatabaseConfig `mapstructure:"database"`
 	Storage  StorageConfig  `mapstructure:"storage"`
+	JWT      JWTConfig      `mapstructure:"jwt"`
+	Server   ServerConfig   `mapstructure:"server"`
 }
 
 type ServerConfig struct {

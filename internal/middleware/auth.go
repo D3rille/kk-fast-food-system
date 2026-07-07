@@ -50,7 +50,7 @@ func Authenticate(jwtSecret string) func(http.Handler) http.Handler {
 
 			// 2. Parse Bearer token
 			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{"error":"authorization header format must be Bearer <token>"}`))
 				return

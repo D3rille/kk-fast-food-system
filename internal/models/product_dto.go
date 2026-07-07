@@ -5,8 +5,8 @@ type CreateProductRequest struct {
 	CategoryID  string `json:"category_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	BasePrice   int64  `json:"base_price"` // Centavos (BIGINT)
 	ImageURL    string `json:"image_url"`
+	BasePrice   int64  `json:"base_price"`
 }
 
 // UpdateProductRequest represents the payload to modify an existing product.
@@ -14,8 +14,8 @@ type UpdateProductRequest struct {
 	CategoryID  string `json:"category_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	BasePrice   int64  `json:"base_price"` // Centavos
 	ImageURL    string `json:"image_url"`
+	BasePrice   int64  `json:"base_price"`
 	IsAvailable bool   `json:"is_available"`
 }
 
@@ -25,8 +25,8 @@ type ProductResponse struct {
 	CategoryID  string `json:"category_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	BasePrice   int64  `json:"base_price"` // Centavos
 	ImageURL    string `json:"image_url"`
+	BasePrice   int64  `json:"base_price"`
 	IsAvailable bool   `json:"is_available"`
 }
 

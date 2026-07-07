@@ -654,7 +654,6 @@ To keep your code consistent with the rest of the project, follow these working 
 See [main.go](file:///c:/Users/Djhanggoo/Documents/Projects/FastFood%20System/fastFoodSystem/cmd/api/main.go) for details on route grouping, setting timeouts, and mounting routers:
 ```go
 r := chi.NewRouter()
-r.Use(chiMiddleware.RealIP)
 r.Use(middleware.Recovery(log))
 r.Use(middleware.Logging(log))
 r.Use(middleware.CORS())
