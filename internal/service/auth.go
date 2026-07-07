@@ -61,9 +61,9 @@ func NewAuthService(
 	}
 }
 
-func (s *authService) Login(ctx context.Context, username, password string) (string, string, *models.User, error) {
+func (s *authService) Login(ctx context.Context, username, password string) (accessToken, refreshToken string, user *models.User, err error) {
 	// 1. Fetch user
-	user, err := s.userRepo.GetByUsername(ctx, username)
+	user, err = s.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		return "", "", nil, ErrInvalidCredentials
 	}
@@ -80,12 +80,12 @@ func (s *authService) Login(ctx context.Context, username, password string) (str
 	}
 
 	// 4. Generate tokens
-	accessToken, err := s.generateToken(user.ID, user.Role, "access", s.accessTokenDur)
+	accessToken, err = s.generateToken(user.ID, user.Role, "access", s.accessTokenDur)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, err := s.generateToken(user.ID, user.Role, "refresh", s.refreshTokenDur)
+	refreshToken, err = s.generateToken(user.ID, user.Role, "refresh", s.refreshTokenDur)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -93,7 +93,7 @@ func (s *authService) Login(ctx context.Context, username, password string) (str
 	return accessToken, refreshToken, user, nil
 }
 
-func (s *authService) Refresh(ctx context.Context, refreshTokenStr string) (string, string, error) {
+func (s *authService) Refresh(ctx context.Context, refreshTokenStr string) (accessToken, refreshToken string, err error) {
 	// 1. Parse and validate refresh token
 	token, err := jwt.ParseWithClaims(refreshTokenStr, &AuthClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {

@@ -113,9 +113,9 @@ func (m *mockPaymentRepository) UpdateStatus(_ context.Context, id string, statu
 var _ repository.PaymentRepository = (*mockPaymentRepository)(nil)
 
 type mockPaymentProvider struct {
-	provider models.PaymentProvider
-	result   *service.PaymentResult
 	err      error
+	result   *service.PaymentResult
+	provider models.PaymentProvider
 }
 
 func (m *mockPaymentProvider) Provider() models.PaymentProvider { return m.provider }

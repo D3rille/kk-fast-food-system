@@ -12,7 +12,7 @@ import (
 func TestHealthz(t *testing.T) {
 	handler := handlers.NewHealthHandler(nil)
 
-	req, err := http.NewRequest("GET", "/healthz", nil)
+	req, err := http.NewRequest("GET", "/healthz", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestHealthz(t *testing.T) {
 func TestReadyz_Disconnected(t *testing.T) {
 	handler := handlers.NewHealthHandler(nil)
 
-	req, err := http.NewRequest("GET", "/readyz", nil)
+	req, err := http.NewRequest("GET", "/readyz", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}

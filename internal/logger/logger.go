@@ -8,7 +8,7 @@ import (
 // New creates a new structured logger.
 // For "production" env, use JSON handler. For anything else, use Text handler.
 // Parse logLevel string to slog.Level.
-func New(env string, logLevel string) *slog.Logger {
+func New(env, logLevel string) *slog.Logger {
 	level := parseLevel(logLevel)
 
 	opts := &slog.HandlerOptions{

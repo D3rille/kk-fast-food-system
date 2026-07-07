@@ -79,7 +79,7 @@ func (r *postgresOrderItemRepository) GetByOrderIDWithProducts(ctx context.Conte
 	var items []models.OrderItemResponse
 	for rows.Next() {
 		var item models.OrderItemResponse
-		if err := rows.Scan(
+		if scanErr := rows.Scan(
 			&item.ID,
 			&item.ProductID,
 			&item.ProductName,
@@ -87,8 +87,8 @@ func (r *postgresOrderItemRepository) GetByOrderIDWithProducts(ctx context.Conte
 			&item.UnitPrice,
 			&item.Subtotal,
 			&item.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan order item row: %w", err)
+		); scanErr != nil {
+			return nil, fmt.Errorf("failed to scan order item row: %w", scanErr)
 		}
 		item.Modifiers = []models.OrderItemModifierResponse{}
 		items = append(items, item)

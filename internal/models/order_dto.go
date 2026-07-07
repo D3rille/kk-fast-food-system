@@ -5,9 +5,9 @@ import "time"
 // CreateOrderItemRequest is a single line item within a CreateOrderRequest.
 type CreateOrderItemRequest struct {
 	ProductID         string   `json:"product_id" validate:"required"`
-	Quantity          int      `json:"quantity"   validate:"required"`
-	UnitPrice         int64    `json:"unit_price" validate:"required"` // centavos; ignored when the product has modifier groups, since the service recomputes it server-side
 	ModifierOptionIDs []string `json:"modifier_option_ids"`
+	Quantity          int      `json:"quantity"   validate:"required"`
+	UnitPrice         int64    `json:"unit_price" validate:"required"`
 }
 
 // CreateOrderRequest defines the API payload for order creation.
@@ -16,18 +16,18 @@ type CreateOrderItemRequest struct {
 type CreateOrderRequest struct {
 	StoreID     string                   `json:"store_id"     validate:"required"`
 	Source      OrderSource              `json:"source"       validate:"required"`
-	TotalAmount int64                    `json:"total_amount" validate:"required"`
 	Items       []CreateOrderItemRequest `json:"items"`
+	TotalAmount int64                    `json:"total_amount" validate:"required"`
 }
 
 // UpdateOrderRequest defines the API payload for updating an order.
 type UpdateOrderRequest struct {
 	ID            string        `json:"id"  validate:"required"`
 	StoreID       string        `json:"store_id"`
-	OrderNumber   int           `json:"order_number"`
 	Source        OrderSource   `json:"source"`
 	Status        OrderStatus   `json:"status"`
 	PaymentStatus PaymentStatus `json:"payment_status"`
+	OrderNumber   int           `json:"order_number"`
 	TotalAmount   int64         `json:"total_amount"`
 }
 
@@ -38,15 +38,15 @@ type ProcessPaymentRequest struct {
 
 // OrderResponse defines the serialized public API response structure for an order.
 type OrderResponse struct {
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
 	ID            string        `json:"id"`
 	StoreID       string        `json:"store_id"`
-	OrderNumber   int           `json:"order_number"`
 	Source        OrderSource   `json:"source"`
 	Status        OrderStatus   `json:"status"`
 	PaymentStatus PaymentStatus `json:"payment_status"`
+	OrderNumber   int           `json:"order_number"`
 	TotalAmount   int64         `json:"total_amount"`
-	CreatedAt     time.Time     `json:"created_at"`
-	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
 // OrderItemModifierResponse is a single selected modifier option attached to an order item.
@@ -59,30 +59,30 @@ type OrderItemModifierResponse struct {
 
 // OrderItemResponse is a single line item within an OrderDetailResponse.
 type OrderItemResponse struct {
+	CreatedAt   time.Time                   `json:"created_at"`
 	ID          string                      `json:"id"`
 	ProductID   string                      `json:"product_id"`
 	ProductName string                      `json:"product_name"`
+	Modifiers   []OrderItemModifierResponse `json:"modifiers"`
 	Quantity    int                         `json:"quantity"`
 	UnitPrice   int64                       `json:"unit_price"`
 	Subtotal    int64                       `json:"subtotal"`
-	CreatedAt   time.Time                   `json:"created_at"`
-	Modifiers   []OrderItemModifierResponse `json:"modifiers"`
 }
 
 // OrderDetailResponse extends OrderResponse with the order's line items.
 type OrderDetailResponse struct {
-	OrderResponse
 	Items []OrderItemResponse `json:"items"`
+	OrderResponse
 }
 
 // PaymentResponse defines the serialized payment record returned after a payment attempt.
 type PaymentResponse struct {
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 	ID             string          `json:"id"`
 	OrderID        string          `json:"order_id"`
 	Provider       PaymentProvider `json:"provider"`
-	Amount         int64           `json:"amount"`
 	Status         PaymentStatus   `json:"status"`
 	TransactionRef string          `json:"transaction_ref"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	Amount         int64           `json:"amount"`
 }

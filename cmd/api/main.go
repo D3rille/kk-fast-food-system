@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/D3rille/kk-fast-food-system/internal/config"
 	"github.com/D3rille/kk-fast-food-system/internal/database"
@@ -26,11 +25,15 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	// 1. Load config
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to load configuration: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	// 2. Initialize structured logger
@@ -48,13 +51,12 @@ func main() {
 	db, err := database.New(ctx, cfg.Database.URL, cfg.Database.MaxConns, cfg.Database.MinConns, log)
 	if err != nil {
 		log.Error("failed to connect to database", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	defer db.Close()
 
 	// 4. Initialize Chi Router & middleware
 	r := chi.NewRouter()
-	r.Use(chiMiddleware.RealIP)
 	r.Use(middleware.Recovery(log))
 	r.Use(middleware.Logging(log))
 	r.Use(middleware.CORS())
@@ -77,7 +79,7 @@ func main() {
 	imageStorage, err := storage.NewLocalImageStorage(cfg.Storage.ImagesDir)
 	if err != nil {
 		log.Error("failed to initialize image storage", "error", err)
-		os.Exit(1)
+		return 1
 	}
 
 	// 7. Initialize Services
@@ -176,7 +178,6 @@ func main() {
 		// Protected Routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticate(cfg.JWT.Secret))
-			// r.Use(middleware.RequireRole(models.RoleAdmin, models.RoleManager))
 
 			r.Route("/orders", func(r chi.Router) {
 				r.Post("/", orderHandler.Create)
@@ -223,6 +224,7 @@ func main() {
 	select {
 	case err := <-srvErr:
 		log.Error("http server failed to start or serve", "error", err)
+		return 1
 	case <-ctx.Done():
 		log.Info("shutting down HTTP server gracefully...")
 
@@ -236,4 +238,6 @@ func main() {
 			log.Info("HTTP server stopped cleanly")
 		}
 	}
+
+	return 0
 }

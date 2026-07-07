@@ -82,7 +82,7 @@ func main() {
 	for _, f := range files {
 		// Ensure parent directory exists
 		dir := filepath.Dir(f.path)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			fmt.Printf("Error creating directory %s: %v\n", dir, err)
 			os.Exit(1)
 		}
@@ -94,7 +94,7 @@ func main() {
 		}
 
 		// Write file
-		err := os.WriteFile(f.path, []byte(f.content), 0644)
+		err := os.WriteFile(f.path, []byte(f.content), 0o644)
 		if err != nil {
 			fmt.Printf("Error writing file %s: %v\n", f.path, err)
 			os.Exit(1)
@@ -124,11 +124,11 @@ func main() {
 	fmt.Printf("       r.Put(\"/{id}\", %sHandler.Update)\n", featureCamel)
 	fmt.Printf("       r.Delete(\"/{id}\", %sHandler.Delete)\n", featureCamel)
 	fmt.Println("   })")
-	fmt.Println("==========================================================================\n")
+	fmt.Println("==========================================================================")
 }
 
 func isValidFeatureName(s string) bool {
-	if len(s) == 0 {
+	if s == "" {
 		return false
 	}
 	for i, r := range s {
@@ -146,7 +146,7 @@ func toPascalCase(s string) string {
 	s = strings.ReplaceAll(s, "-", "_")
 	parts := strings.Split(s, "_")
 	for i, p := range parts {
-		if len(p) > 0 {
+		if p != "" {
 			parts[i] = strings.ToUpper(p[:1]) + strings.ToLower(p[1:])
 		}
 	}
@@ -154,7 +154,7 @@ func toPascalCase(s string) string {
 }
 
 func toCamelCase(s string) string {
-	if len(s) == 0 {
+	if s == "" {
 		return ""
 	}
 	return strings.ToLower(s[:1]) + s[1:]
@@ -533,7 +533,7 @@ func to%sResponse(item *models.%s) *models.%sResponse {
 		// TODO: Map custom fields
 	}
 }
-`, pascal, camel, pascal, pascal, pascal, pascal, pascal, pascal, plural, pascal, pascal, pascal, plural, pascal, plural, pascal, pascal, plural, pascal, pascal, plural, pascal, pascal, pascal, pascal)
+`, pascal, camel, pascal, pascal, pascal, pascal, pascal, pascal, plural, pascal, pascal, pascal, plural, pascal, plural, pascal, pascal, plural, pascal, pascal, plural, pascal, pascal, pascal, pascal, plural, pascal, pascal, pascal, pascal, pascal)
 }
 
 func generateTest(pascal, camel string) string {
